@@ -2,7 +2,7 @@ package = "websocket"
 version = "scm-1"
 
 source = {
-    url = "git+https://github.com/tarantool/websocket.git",
+    url = "git+https://github.com/first-leon/websocket.git",
     branch = 'master',
 }
 
