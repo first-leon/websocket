@@ -437,7 +437,11 @@ function wspeer.read(self, timeout)
                     return nil, self.peer:error()
                 end
             elseif tuple.opcode == nil then
-                return tuple
+                if self.closed_by_me then
+                    return nil, "Closing Handshake"
+                else
+                    return tuple
+                end
             end
         until tuple ~= nil
 
