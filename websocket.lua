@@ -234,40 +234,21 @@ function wspeer.shutdown(self, code, reason, timeout)
               self['peerport'],
               code,
               reason)
-    local packet = frame.encode(frame.encode_close(code, reason),
-                                frame.CLOSE, self.is_client, true)
-    local rc = self.peer:write(packet, frame.slice_wait(timeout, starttime))
-    if not rc then
-        return nil, self.peer:error()
-    end
 
-    rawset(self, 'close_sended', true)
     rawset(self, 'closed_by_me', not self.close_received)
 
     if not self.close_received then
-        while true do
-            local tuple = frame.decode_from(self.peer, frame.slice_wait(timeout, starttime))
-            if tuple == nil then
-                log.debug('Read failed while close handshake')
-                break
-            elseif tuple.opcode == nil then
-                log.debug('Read eof while close handshake')
-                break
-            end
-
-            local rc, err = self:validate(tuple)
-            if not rc then
-                log.debug('Validation failed while close handshake %s', tostring(err))
-                -- TODO think about
-                -- break
-            end
-
-            if tuple.opcode == frame.CLOSE then
-                log.debug('Close handshake success')
-                rawset(self, 'close_received', true)
-                break
-            end
+        local packet = frame.encode(frame.encode_close(code, reason),
+                                    frame.CLOSE, self.is_client, true)
+        self.peer:write(packet, frame.slice_wait(timeout, starttime))
+        if not rc then
+            --It is not critical whether the client has received a closing request. In any case, we close the socket.
+            log.debug('Error sending Closing Handshake. Peer %s:%d',
+                      self['peerhost'],
+                      self['peerport'])
         end
+
+        rawset(self, 'close_sended', true)
     end
 
     -- TODO think about result
@@ -409,8 +390,6 @@ function wspeer.validate(self, tuple)
     return true
 end
 
---[[
-]]
 function wspeer.read(self, timeout)
     local starttime = clock.time()
 
@@ -484,12 +463,15 @@ function wspeer.read(self, timeout)
                       self['peerport'])
             rawset(self, 'ping_sended', false)
         elseif tuple.opcode == frame.CLOSE then
-            log.debug('Websocket peer close received')
-
+            local code, reason = frame.decode_close(tuple.data)
+            code = code or ""
+            reason = reason or ""
+            log.debug('Websocket peer close received. Code: %d, reason %s', code, reason)
+            
             rawset(self, 'close_received', true)
-
+            
             self:shutdown(1000, '', frame.slice_wait(timeout, starttime))
-            return nil, 'Close handshaked'
+            return nil, 'Close handshaked. Code: ' .. code .. ". Reason: " .. reason
         else
             return tuple
         end
